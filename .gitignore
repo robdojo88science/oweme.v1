@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+*.local
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+backups/
+private/
+qa/
+.npm-cache/
+.playwright-browsers/
