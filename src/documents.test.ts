@@ -76,6 +76,12 @@ describe('offline PDF financial content', () => {
     expect(compact.internal.pageSize.getWidth()).toBeCloseTo(80, 0);
     expect(pdfContent(compact)).toContain('2,500.00');
   });
+  it('marks a regenerated reversed receipt while preserving original money and identity', () => {
+    const text = pdfContent(receiptPdf(borrower, loan, payment, settings, false, true));
+    expect(text).toContain('Reversed payment receipt - history'); expect(text).toContain('not an active collection');
+    expect(text).toContain(payment.ref); expect(text).toContain('Example Person / 001');
+    expect(text).toContain('PHP 500.00'); expect(text).toContain('PHP 2,500.00');
+  });
   it('filters statements without changing the current all-history balance', () => {
     const text = pdfContent(statementPdf({ ...borrower, archived: true }, snapshot, '2026-12-01', '2026-12-31'));
     expect(text).toContain('archived'); expect(text).toContain('PHP 2,500.00');

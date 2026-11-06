@@ -6,7 +6,7 @@ The fast path is **Add borrower → New loan → Review release → Record payme
 
 ## Run locally
 
-Use Node.js 22 or newer and npm. In Windows PowerShell, use `npm.cmd` when script execution policy blocks `npm.ps1`.
+Use Node.js 24, or Node.js 22.18+ in the 22.x line, and npm. The browser-test wrapper uses Node’s native TypeScript loading. In Windows PowerShell, use `npm.cmd` when script execution policy blocks `npm.ps1`.
 
 ```sh
 npm ci

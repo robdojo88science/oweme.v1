@@ -6,16 +6,20 @@ import { applySnapshot, db, defaultSettings, getChangeVersion, getCounterSnapsho
 const cents = z.number().int().min(0).max(100_000_000_000);
 const text = z.string().max(100_000);
 const identifier = z.string().min(1).max(200);
+const displayIdentifier = z.string().regex(/^\d{3,16}$/).refine(value => {
+  const numeric = Number(value);
+  return Number.isSafeInteger(numeric) && numeric > 0 && value === String(numeric).padStart(3, '0');
+}, 'Invalid borrower display ID');
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }, 'Invalid calendar date');
 const timestamp = z.string().refine(value => !Number.isNaN(Date.parse(value)), 'Invalid timestamp');
 const borrowerSchema = z.object({
-  id: identifier, displayId: z.string().regex(/^\d{3,}$/), name: z.string().min(1).max(200), phone: text,
+  id: identifier, displayId: displayIdentifier, name: z.string().min(1).max(200), phone: text,
   address: text, income: cents.nullable(), notes: text, createdAt: timestamp, archived: z.boolean(),
 }).strict();
-const borrowerSnapshotSchema = z.object({ name: z.string().min(1).max(200), displayId: z.string().regex(/^\d{3,}$/), phone: text, address: text }).strict();
+const borrowerSnapshotSchema = z.object({ name: z.string().min(1).max(200), displayId: displayIdentifier, phone: text, address: text }).strict();
 const businessSnapshotSchema = z.object({ businessName: text, ownerName: text, address: text, contact: text }).strict();
 const loanSchema = z.object({
   id: identifier, ref: identifier, borrowerId: identifier, createdAt: timestamp, issuedOn: date,
@@ -38,7 +42,7 @@ const attachmentSchema = z.object({
   createdAt: timestamp, revisionOf: identifier.optional(), category: z.enum(['agreement', 'proof', 'other']).optional(),
 }).strict();
 const auditSchema = z.object({ id: identifier, at: timestamp, action: text, entityId: text, detail: text, operator: text }).strict();
-const draftSchema = z.object({ id: identifier, borrowerId: text, values: z.record(z.string()), updatedAt: timestamp }).strict();
+const draftSchema = z.object({ id: identifier, borrowerId: text, values: z.record(z.string(), z.string()), updatedAt: timestamp }).strict();
 const settingsSchema = z.object({
   businessName: text, ownerName: text, address: text, contact: text,
   defaultRateBps: z.number().int().min(0).max(9999), defaultMonths: z.number().int().min(1).max(120),
@@ -53,8 +57,8 @@ const dataSchema = z.object({
 }).strict();
 const payloadSchema = z.object({
   app: z.literal('OweMe'), schemaVersion: z.literal(1), createdAt: timestamp,
-  data: dataSchema, counters: z.record(z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)),
-  counts: z.record(z.number().int().min(0)),
+  data: dataSchema, counters: z.record(z.string(), z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)),
+  counts: z.record(z.string(), z.number().int().min(0)),
 }).strict();
 
 export interface BackupEnvelope {
@@ -104,6 +108,13 @@ export function validateAccounting(data: DataSnapshot) {
   for (const key of ['borrowers', 'loans', 'entries', 'attachments', 'audits', 'drafts'] as const) unique(data[key], key);
   unique(data.borrowers, 'borrower', 'displayId'); unique(data.loans, 'loan', 'ref');
   unique(data.entries, 'transaction', 'ref'); unique(data.entries, 'transaction', 'idempotencyKey');
+  for (const item of [...data.loans, ...data.entries]) {
+    const match = /^OWM-(LON|DIS|PAY|REV)-(\d{4})-(\d{6,16})$/.exec(item.ref);
+    const expected = 'kind' in item ? { release: 'DIS', payment: 'PAY', reversal: 'REV' }[item.kind] : 'LON';
+    const recordedDate = 'kind' in item ? item.date : item.issuedOn;
+    const sequence = match ? Number(match[3]) : 0;
+    if (!match || match[1] !== expected || match[2] !== recordedDate.slice(0, 4) || !Number.isSafeInteger(sequence) || sequence <= 0 || match[3] !== String(sequence).padStart(6, '0')) throw new Error(`Invalid or unsafe transaction/loan reference ${item.ref}. Nothing was restored.`);
+  }
   for (const loan of data.loans) {
     if (!borrowers.has(loan.borrowerId)) throw new Error(`Loan ${loan.ref} has no borrower. Nothing was restored.`);
     const computed = calculateLoan({ amount: moneyInput(loan.inputAmount), rate: String(loan.rateBps / 100), months: loan.months,

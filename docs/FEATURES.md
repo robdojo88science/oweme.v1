@@ -1,6 +1,6 @@
 # Feature status
 
-This file describes implementation scope. Automated and browser verification results should be added by the final build run; source presence alone does not establish a passing test.
+This file describes implementation scope and the verification completed on November 6, 2026 (Asia/Manila).
 
 ## Core scope
 
@@ -20,7 +20,7 @@ Implemented exports:
 
 PDFs bundle their font resources and use `PHP` in place of an unsupported peso glyph. This does not require a web-font service. A generated paper agreement does not claim enforceability or prove that anyone signed it.
 
-PDF verification: seven content/pagination tests passed with `npm test -- src/documents.test.ts`. They include identity regressions: renaming a borrower or business does not alter an issued agreement, and a receipt uses its payment-time identity. New records carry immutable borrower/business snapshots; legacy imports without snapshots use the documented fallback. The final two-page synthetic sample was rendered with MuPDF and both pages were visually inspected for clipping, overlap, signature placement and repeated loan identification. This verifies the sample layout; physical printer output still needs a local check. Recreate the sample with `node docs/generate-sample.mjs` after dependencies are installed.
+PDF verification: eight content/pagination tests passed with `npm test -- src/documents.test.ts`. They include identity regressions: renaming a borrower or business does not alter an issued agreement, a receipt uses its payment-time identity, and a regenerated reversed receipt is marked while preserving its original money snapshot. New records carry immutable borrower/business snapshots; legacy imports without snapshots use the documented fallback. The final two-page synthetic sample was rendered with MuPDF and both pages were visually inspected for clipping, overlap, signature placement and repeated loan identification. This verifies the sample layout; physical printer output still needs a local check. Recreate the sample with `node docs/generate-sample.mjs` after dependencies are installed.
 
 ## Signed-paper attachments
 
@@ -34,9 +34,19 @@ The gallery requires an exact loan association, accepts camera images and image/
 - Automatic two-way multi-device sync is not implemented; use explicit backup and recovery. Revision conflicts require review.
 - Automatic email delivery is not enabled without a separately configured authorized API or service. Download plus manual email attachment is the honest fallback.
 - Automatic advance-credit/refund accounting, manually altered installment allocation, signed amendments to issued financial obligations and annualized effective-rate/APR calculations are outside the current core engine. Do not represent them as available.
+- Password-encrypted exports, large ZIP backups, biometric/privacy-lock UI, OCR and freeform document-edge cropping are not included. Portable backups are unencrypted JSON, and the import size limit is 150 MB.
+- Search normalizes case, accents and spacing and supports text fragments; fuzzy typo ranking and the full set of advanced cross-module search filters are not included.
 - Privacy erasure requires a retention/legal review. Archive preserves records and is not erasure.
 - Real touch keyboard, iOS installation, VoiceOver, camera behavior and physical printer output need device checks even when desktop browser tests pass.
 
 ## Final verification record
 
-Pending the parent implementation's typecheck, lint, financial/storage/integration tests, production build and browser run. The final response and actual command output are the authority for what passed.
+Verified locally with Node 24 and Chrome:
+
+- `npm run typecheck` and `npm run lint` passed.
+- `npm test` passed all 83 tests: 47 financial, 17 database/backup, 11 mocked Drive and 8 PDF tests.
+- Production builds passed at `/` and the repository's GitHub Pages path, `/oweme.v1/`.
+- `node scripts/verify-production.mjs` passed for both paths: empty initial database, manifest/icons, correct service-worker scope, offline reload, persisted offline borrower, live calculator and agreement PDF download, with zero uncaught browser errors. Use the same `VITE_BASE_PATH` for the build and verification command.
+- `npm run test:e2e` passed all 24 checks across six screen sizes after fixing a focused payment input that could sit behind the sticky action bar. Focused loan/payment fields now scroll clear of overlays; the regression checks inspect actual hit targets as well as viewport bounds.
+
+The browser suite and screen-size results are recorded in [the friction audit](FRICTION-AUDIT.md). Live Google account authorization/upload/recovery, real touch keyboards, iOS installation, VoiceOver, camera behavior and physical printing remain device/account checks. Mocked Drive tests and desktop touch emulation do not certify those capabilities. These local checks do not establish that the current working tree has been published.

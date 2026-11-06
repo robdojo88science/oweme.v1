@@ -28,6 +28,7 @@ let expiresAt = 0;
 let autoTimer: ReturnType<typeof setTimeout> | undefined;
 let scriptLoading: Promise<void> | null = null;
 const requests = new Set<AbortController>();
+const recoveryPreviews = new Map<string, string>();
 const state: DriveState = { connected: false, pending: false, syncing: false, lastSuccess: '', error: '', account: '' };
 const online = () => typeof navigator === 'undefined' || navigator.onLine;
 const token = () => accessToken && expiresAt > Date.now() + 10_000 ? accessToken : '';
@@ -99,6 +100,7 @@ export function disconnectDrive() {
   const oldToken = accessToken;
   accessToken = ''; expiresAt = 0; state.connected = false; state.account = ''; state.error = '';
   if (autoTimer) clearTimeout(autoTimer);
+  recoveryPreviews.clear();
   for (const controller of requests) controller.abort();
   if (oldToken && typeof window !== 'undefined' && window.google) window.google.accounts.oauth2.revoke(oldToken);
   emit();
@@ -211,15 +213,23 @@ export async function listDriveBackups(): Promise<FileMetadata[]> {
 export async function downloadDriveBackup(fileId?: string): Promise<BackupEnvelope> {
   const chosen = fileId || (await getSettings()).driveFileId;
   if (!chosen) throw new Error('Choose a recovery file from your connected Drive account.');
+  const before = await metadata(chosen);
   const response = await request(`${API}/files/${encodeURIComponent(chosen)}?alt=media`);
-  return inspectBackup(await response.text());
+  const preview = await inspectBackup(await response.text());
+  const after = await metadata(chosen);
+  if (revisionOf(before.file) !== revisionOf(after.file)) throw new Error('The Drive file changed while downloading. Download the latest recovery copy again before restoring.');
+  recoveryPreviews.set(chosen, revisionOf(after.file));
+  return preview;
 }
 
 export const restoreDriveBackup = downloadDriveBackup;
 
 /** Select only after preview/confirmation. Financial restore remains a separate confirmed operation. */
 export async function adoptDriveFile(fileId: string) {
+  const reviewedRevision = recoveryPreviews.get(fileId);
+  if (!reviewedRevision) throw new Error('Download and review this Drive recovery copy before selecting it for future backups.');
   const remote = await metadata(fileId);
+  if (revisionOf(remote.file) !== reviewedRevision) throw new Error('Local records were restored, but the Drive file changed after your preview. Download and review the latest Drive copy before backing up; the newer copy was not overwritten.');
   await saveSettings({ driveFileId: fileId, driveRevision: revisionOf(remote.file) }, { quiet: true });
   await refreshDriveStatus();
 }

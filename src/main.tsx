@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { HashRouter } from 'react-router-dom';
+import { createHashRouter, RouterProvider } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import './styles.css';
@@ -15,4 +15,5 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {error:
     return this.props.children;
   }
 }
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><ErrorBoundary><HashRouter><App /></HashRouter></ErrorBoundary></React.StrictMode>);
+const router = createHashRouter([{ path: '*', element: <App /> }]);
+ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><ErrorBoundary><RouterProvider router={router}/></ErrorBoundary></React.StrictMode>);

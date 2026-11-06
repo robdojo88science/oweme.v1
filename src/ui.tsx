@@ -16,6 +16,48 @@ export function useDirty(value:boolean) {
   const {setDirty} = useContext(NavigationContext);
   useEffect(()=>{setDirty(value); return ()=>setDirty(false);},[value,setDirty]);
 }
+export function useFormViewport() {
+  const ref = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    const form = ref.current;
+    if (!form) return;
+    let frame = 0;
+    const reveal = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (!(active instanceof HTMLElement) || !form.contains(active) || !active.matches('input, select, textarea')) return;
+        const viewport = window.visualViewport;
+        const viewportTop = viewport?.offsetTop ?? 0;
+        const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
+        const summary = form.querySelector<HTMLElement>('.mobile-live-summary');
+        const top = viewportTop + (summary && getComputedStyle(summary).position === 'sticky' ? summary.offsetHeight : 0) + 12;
+        let bottom = viewportBottom - 12;
+        for (const overlay of [form.querySelector('.form-actionbar'), document.querySelector('.bottom-nav')]) {
+          if (!overlay) continue;
+          const box = overlay.getBoundingClientRect();
+          if (box.height && box.top < viewportBottom && box.bottom > viewportTop) bottom = Math.min(bottom, box.top - 12);
+        }
+        const field = active.closest('.field')?.getBoundingClientRect();
+        const box = field && field.height <= bottom - top ? field : active.getBoundingClientRect();
+        const distance = box.top < top ? box.top - top : box.bottom > bottom ? box.bottom - bottom : 0;
+        if (Math.abs(distance) > .5) window.scrollBy({ top: distance, behavior: 'auto' });
+      });
+    };
+    form.addEventListener('focusin', reveal);
+    window.addEventListener('resize', reveal);
+    window.visualViewport?.addEventListener('resize', reveal);
+    window.visualViewport?.addEventListener('scroll', reveal);
+    return () => {
+      cancelAnimationFrame(frame);
+      form.removeEventListener('focusin', reveal);
+      window.removeEventListener('resize', reveal);
+      window.visualViewport?.removeEventListener('resize', reveal);
+      window.visualViewport?.removeEventListener('scroll', reveal);
+    };
+  }, []);
+  return ref;
+}
 export function AppLink({to,children,className='',...props}:{to:string;children:ReactNode;className?:string;title?:string;'aria-label'?:string}) {
   const go = useGo();
   return <a href={`#${to}`} className={className} {...props} onClick={e=>{if(!e.ctrlKey&&!e.metaKey){e.preventDefault();go(to);}}}>{children}</a>;

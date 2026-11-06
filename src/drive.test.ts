@@ -96,7 +96,9 @@ describe('real Drive backup protocol with mocked network', () => {
     // A local reset deliberately revokes the old in-memory authorization.
     driveTestSession.set('reauthorized-for-recovery');
     const mockFetch = vi.fn()
+      .mockResolvedValueOnce(json({ id: 'recover', version: '3', modifiedTime: '2026-01-01T00:00:00Z' }))
       .mockResolvedValueOnce(new Response(backup, { status: 200 }))
+      .mockResolvedValueOnce(json({ id: 'recover', version: '3', modifiedTime: '2026-01-01T00:00:00Z' }))
       .mockResolvedValueOnce(json({ id: 'recover', version: '3', modifiedTime: '2026-01-01T00:00:00Z' }));
     vi.stubGlobal('fetch', mockFetch);
     const preview = await downloadDriveBackup('recover');
@@ -104,6 +106,20 @@ describe('real Drive backup protocol with mocked network', () => {
     expect((await getSettings()).driveFileId).toBe('');
     await adoptDriveFile('recover');
     expect((await getSettings()).driveFileId).toBe('recover');
+  });
+
+  it('refuses to adopt a newer remote file that changed after the recovery preview', async () => {
+    const backup = await exportBackup();
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce(json({ id: 'recover', version: '3', modifiedTime: '2026-01-01T00:00:00Z' }))
+      .mockResolvedValueOnce(new Response(backup, { status: 200 }))
+      .mockResolvedValueOnce(json({ id: 'recover', version: '3', modifiedTime: '2026-01-01T00:00:00Z' }))
+      .mockResolvedValueOnce(json({ id: 'recover', version: '4', modifiedTime: '2026-01-02T00:00:00Z' }));
+    vi.stubGlobal('fetch', mockFetch);
+    await downloadDriveBackup('recover');
+    await expect(adoptDriveFile('recover')).rejects.toThrow(/changed after your preview/);
+    expect((await getSettings()).driveFileId).toBe('');
+    expect((await getSettings()).driveRevision).toBe('');
   });
 
   it('keeps a change made during upload pending against the exact captured version', async () => {

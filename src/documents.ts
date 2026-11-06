@@ -133,11 +133,12 @@ export function agreementPdf(currentBorrower: Borrower, loan: Loan, currentSetti
   return p.finish();
 }
 
-export function receiptPdf(currentBorrower: Borrower, loan: Loan, entry: LedgerEntry, currentSettings: Settings, compact = false): jsPDF {
+export function receiptPdf(currentBorrower: Borrower, loan: Loan, entry: LedgerEntry, currentSettings: Settings, compact = false, reversed = false): jsPDF {
   const borrower = { ...currentBorrower, ...(entry.borrowerSnapshot || loan.borrowerSnapshot) };
   const settings = { ...currentSettings, ...(entry.businessSnapshot || loan.businessSnapshot) };
-  const title = entry.kind === 'release' ? 'Cash release acknowledgement' : entry.kind === 'reversal' ? 'Payment reversal record' : 'Payment receipt';
+  const title = entry.kind === 'release' ? 'Cash release acknowledgement' : entry.kind === 'reversal' ? 'Payment reversal record' : reversed ? 'Reversed payment receipt - history' : 'Payment receipt';
   const p = new Paper(title, settings, compact, entry.ref);
+  if (reversed && entry.kind === 'payment') p.text('REVERSED - This historical payment was corrected by a reversal. It is not an active collection. The original amount and balance below are kept for the audit trail.', 10, [165, 38, 58], true);
   p.pair('Receipt / transaction reference', entry.ref);
   p.pair('Borrower / notebook ID', `${borrower.name} / ${borrower.displayId}`);
   p.pair('Loan reference', loan.ref);
